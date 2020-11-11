@@ -1,9 +1,10 @@
-#include "opencv2/core/utility.hpp"
-#include "opencv2/imgproc.hpp"
-#include "opencv2/imgcodecs.hpp"
-#include "opencv2/highgui.hpp"
+#include <opencv2/core/utility.hpp>
+#include <opencv2/imgproc.hpp>
+#include <opencv2/imgcodecs.hpp>
+#include <opencv2/highgui.hpp>
 
-
+#include <stdlib.h>
+#include <time.h> 
 #include <iostream>
 #include <cmath>
 
@@ -13,20 +14,19 @@ class Ball
         cv::Mat _canvas;
         int _radius;
         cv::Scalar _color;
-        float _bounce;
-        float _weight;
+        float _elasticity;
         float _gravity;
-        float _xImpulse;
-        float _yImpulse;
         std::vector<std::vector<cv::Point>> _contours;
         cv::Point2f _initialPosition;
 
+        float _angleOfMovement;
+
     public:
         cv::Point2f position;
+        cv::Point2f initialVelocity;
+        cv::Point2f velocity;
         float milisecondsSinceLastCollision;
-        float x0 = 0, y0 = 0;
-        float v0X, v0Y;
-        int timeToBounce = 1;
+        int timeToBounce = .4;
 
         std::vector<int> convexHull;
         
@@ -35,22 +35,24 @@ class Ball
         Ball(
             cv::Mat canvas,
             cv::Point2f _position, 
+            cv::Point2f _velocity,
             int radius, cv::Scalar color, 
-            float bounce, 
-            float weight
+            float elasticity
             )
         {
+            std::cout << _velocity.x << std::endl;
             _canvas = canvas;
             position = _position;
+            velocity = _velocity;
             _radius = radius;
             _color = color;
-            _bounce = bounce;
-            _weight = weight;
-            _gravity = 15;
+            _elasticity = elasticity;
+            _gravity = .098;
 
             _initialPosition = _position;
+            initialVelocity = _velocity;
 
-            milisecondsSinceLastCollision = 0;
+            milisecondsSinceLastCollision = 800;
         }
 
         ~Ball()
@@ -60,83 +62,152 @@ class Ball
 
         void tick()
         {
-            if(!checkCollision())
+            if(position.x + _radius >= _canvas.cols)
             {
-                std::cout << std::endl << std::endl << std::endl << std::endl << std::endl;
-
-                milisecondsSinceLastCollision+=.01;
-
-                _xImpulse = x0 + (v0X * milisecondsSinceLastCollision); // x=x0+vxt
-                _yImpulse = y0 + 0.5 * (v0Y + (v0Y - _gravity * milisecondsSinceLastCollision)) * milisecondsSinceLastCollision; // https://openstax.org/books/university-physics-volume-1/pages/4-3-projectile-motion
-
-                std::cout << "xImpulse: " << _xImpulse << std::endl;
-                std::cout << "yImpulse: " << _yImpulse << std::endl;
-                position.x += _xImpulse;
-                position.y -= _yImpulse;
-
-                cv::circle(_canvas, position, _radius, _color, cv::LineTypes::FILLED);
-
-                std::cout << "Angle of movement: " << getAngleOfMovement() << std::endl;
-                std::cout << "Ball Position: " << position.x << ", " << position.y << std::endl;
-                std::cout << "Time since last collision: " << milisecondsSinceLastCollision << std::endl;
+                keepBallInFrameX(true);
             }
-            else
+            if(position.y + _radius >= _canvas.rows)
             {
-                collide();
+                keepBallInFrameY(false);
             }
+            if(position.x - _radius < 0)
+            {
+                keepBallInFrameX(false);
+            }
+            if(position.y - _radius <= 0)
+            {
+                keepBallInFrameY(true);
+            }
+
+            milisecondsSinceLastCollision+=.01;
+            velocity.y += _gravity;
+
+            position.x += velocity.x;
+            position.y += velocity.y;
+
+            _angleOfMovement = getAngleOfMovement();
+            cv::circle(_canvas, position, _radius, _color, cv::LineTypes::FILLED);
+            std::cout << std::endl << std::endl << std::endl << std::endl;
+            std::cout << "Ball Position: " << position.x << ", " << position.y << std::endl;
+            std::cout << "Ball Velocity: " << velocity.x << ", " << velocity.y << std::endl;
+            std::cout << "Movement angle: " << _angleOfMovement << std::endl;
             
+            if(checkCollision())
+            {
+                milisecondsSinceLastCollision = 0;
+                if(isAnglePositiveX(_angleOfMovement))
+                {
+                    velocity.x = velocity.x - (velocity.x * _elasticity);
+                }
+                else
+                {
+                    velocity.x = velocity.x + (velocity.x * _elasticity);
+                }
+
+                if(isAnglePositiveY(_angleOfMovement))
+                {
+                    velocity.y = velocity.y + (velocity.y * _elasticity);
+                }
+                else
+                {
+                    velocity.y = velocity.y - (velocity.y * _elasticity);
+                }
+            }
         }
 
         bool checkCollision()
         {
-            if(milisecondsSinceLastCollision < timeToBounce)
-                return false;
-            for(int i = 0; i < _contours.size(); i++)
-                for(int j = 0; j < _contours[i].size(); j++)
-                    if(distanceBetweenPointAndBall(_contours[i][j], position) < 4.f) // 2 is the best threshold
-                        return true;
-            if(((position.x + _radius) >= _canvas.cols || (position.y + _radius) >= _canvas.rows) || ((position.x + _radius) <= 0 || (position.y + _radius) <= 0))
-                return true;
+            if(milisecondsSinceLastCollision > timeToBounce)
+            {
+                for(int i = 0; i < _contours.size(); i++)
+                    for(int j = 0; j < _contours[i].size(); j++)
+                        if(floor(euclideanDist(_contours[i][j], position)) < 4)
+                        {
+                            return true;
+                        }
+            }
             return false;
-        }
-
-        void collide()
-        {
-            
-            std::cout << "Collision detected. Angle before colliding: " << getAngleOfMovement() << std::endl;
-
-            x0 = (v0X * cos(getAngleOfMovement())) * milisecondsSinceLastCollision*.001 * -1;
-            y0 = (v0Y * sin(getAngleOfMovement())) * milisecondsSinceLastCollision*.001 * -1;
-
-
-            milisecondsSinceLastCollision = 0;
-            tick();
         }
 
         float getAngleOfMovement()
         {
-            return atan2(_yImpulse, _xImpulse) * (180.0 / M_PI);
+            //return cv::fastAtan2(-velocity.y, velocity.x);
+            return atan2(-velocity.y, velocity.x) * (180.0 / M_PI);
         }
 
         void debug()
         {
-            //_yImpulse = -100;
-            std::cout << "X impulse: " << _xImpulse << std::endl << "Y impulse: " << _yImpulse << std::endl;
-            //std::cout << "Movement angle:" << getAngleOfMovement() << std::endl;
-
             position = _initialPosition;
+            velocity = initialVelocity;
 
         }
 
         // Ball position must be second parameter
-        float distanceBetweenPointAndBall(cv::Point point, cv::Point ballPoint)
-        {
-            return sqrt(pow((point.x - (ballPoint.x + _radius)), 2) + pow((point.y - (ballPoint.y + _radius)), 2));;
+        float euclideanDist(cv::Point p1, cv::Point p2) {
+            cv::Point diff = p1 - p2;
+            return cv::sqrt(diff.x*diff.x + diff.y*diff.y);
         }
 
         void updateCanvas(cv::Mat image, std::vector<std::vector<cv::Point>> contours)
         {
             _canvas = image;
             _contours = contours;
+        }
+
+
+        void keepBallInFrameX(bool right)
+        {
+            if(right)
+            {
+                position.x = _canvas.cols - _radius - 2;
+                velocity.x = initialVelocity.x;
+            }
+            else
+            {
+                position.x = _radius + 2;
+                velocity.x = -initialVelocity.x;
+            }
+            
+        }
+
+        void keepBallInFrameY(bool top)
+        {
+            if(top)
+            {
+                position.y = _radius + 2;
+                velocity.y = 0;
+            }
+            else
+            {
+                position.y = _canvas.rows - _radius - 2;
+                velocity.y = -4;
+            }
+            
+        }
+
+        bool isAnglePositiveX(float angleOfMovement)
+        {
+            if(angleOfMovement >= 270 && angleOfMovement <= 90)
+                return false; //Positive movement in y
+            if(angleOfMovement >= 90 && angleOfMovement <= 270)
+                return true; //Negative movement in y
+            if(angleOfMovement <= -270 && angleOfMovement >= -90)
+                return true; //Positive movement in y
+            if(angleOfMovement <= -90 && angleOfMovement >= -270)
+                return false; //Negative movement in y
+            return false;
+        }
+
+        bool isAnglePositiveY(float angleOfMovement)
+        {
+            if(angleOfMovement >= 0 && angleOfMovement <= 180)
+                return true; //Positive movement in y
+            if(angleOfMovement >= 180 && angleOfMovement <= 360)
+                return false; //Negative movement in y
+            if(angleOfMovement <= 0 && angleOfMovement >= -180)
+                return false; //Positive movement in y
+            if(angleOfMovement <= -180 && angleOfMovement >= -360)
+                return true; //Negative movement in y
+            return false;
         }
 };
