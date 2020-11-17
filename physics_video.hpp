@@ -21,15 +21,20 @@ class Ball
 
         float _angleOfMovement;
 
+        bool _debug = true;
+        int _contourThreshold;
+
+        float _speedLimit = 25;
+        int _colCount = 0;
+
+        int _frameCount = 0;
+
     public:
         cv::Point2f position;
         cv::Point2f initialVelocity;
         cv::Point2f velocity;
         float milisecondsSinceLastCollision;
-        int timeToBounce = .4;
-
-        std::vector<int> convexHull;
-        
+        int timeToBounce = .05;
 
     public: 
         Ball(
@@ -52,7 +57,7 @@ class Ball
             _initialPosition = _position;
             initialVelocity = _velocity;
 
-            milisecondsSinceLastCollision = 800;
+            milisecondsSinceLastCollision = 0;
         }
 
         ~Ball()
@@ -87,13 +92,21 @@ class Ball
 
             _angleOfMovement = getAngleOfMovement();
             cv::circle(_canvas, position, _radius, _color, cv::LineTypes::FILLED);
-            std::cout << std::endl << std::endl << std::endl << std::endl;
-            std::cout << "Ball Position: " << position.x << ", " << position.y << std::endl;
-            std::cout << "Ball Velocity: " << velocity.x << ", " << velocity.y << std::endl;
-            std::cout << "Movement angle: " << _angleOfMovement << std::endl;
+            if(_debug)
+            {
+                std::cout << std::endl << std::endl << std::endl << std::endl << std::endl << std::endl << std::endl << std::endl << std::endl;
+                std::cout << std::endl << std::endl << std::endl << std::endl << std::endl << std::endl << std::endl << std::endl << std::endl;
+                std::cout << "Ball Position: " << position.x << ", " << position.y << std::endl;
+                std::cout << "Ball Velocity: " << velocity.x << ", " << velocity.y << std::endl;
+                std::cout << "Movement angle: " << _angleOfMovement << std::endl;
+                std::cout << "Collision Count: " << _colCount << std::endl;
+                std::cout << "Edge Threshold: " << _contourThreshold << std::endl;
+                std::cout << "Frame Count: " << ++_frameCount << std::endl;
+            }
             
             if(checkCollision())
             {
+                _colCount++;
                 milisecondsSinceLastCollision = 0;
                 if(isAnglePositiveX(_angleOfMovement))
                 {
@@ -113,11 +126,27 @@ class Ball
                     velocity.y = velocity.y - (velocity.y * _elasticity);
                 }
             }
+
+            if(abs(velocity.x) >= _speedLimit)
+            {
+                if(velocity.x >= 0)
+                    velocity.x = _speedLimit;
+                else
+                    velocity.x = -_speedLimit;
+            }
+
+            if(abs(velocity.y) >= _speedLimit)
+            {
+                if(velocity.y >= 0)
+                    velocity.y = _speedLimit;
+                else
+                    velocity.y = -_speedLimit;
+            }
         }
 
         bool checkCollision()
         {
-            if(milisecondsSinceLastCollision > timeToBounce)
+            if(milisecondsSinceLastCollision >= timeToBounce)
             {
                 for(int i = 0; i < _contours.size(); i++)
                     for(int j = 0; j < _contours[i].size(); j++)
@@ -131,15 +160,12 @@ class Ball
 
         float getAngleOfMovement()
         {
-            //return cv::fastAtan2(-velocity.y, velocity.x);
             return atan2(-velocity.y, velocity.x) * (180.0 / M_PI);
         }
 
         void debug()
         {
-            position = _initialPosition;
-            velocity = initialVelocity;
-
+            _debug = !_debug;
         }
 
         // Ball position must be second parameter
@@ -148,10 +174,11 @@ class Ball
             return cv::sqrt(diff.x*diff.x + diff.y*diff.y);
         }
 
-        void updateCanvas(cv::Mat image, std::vector<std::vector<cv::Point>> contours)
+        void updateCanvas(cv::Mat image, std::vector<std::vector<cv::Point>> contours, int edgeThresh)
         {
             _canvas = image;
             _contours = contours;
+            _contourThreshold = edgeThresh;
         }
 
 
@@ -160,12 +187,13 @@ class Ball
             if(right)
             {
                 position.x = _canvas.cols - _radius - 2;
-                velocity.x = initialVelocity.x;
+                //velocity.x = initialVelocity.x;
+                velocity.x = -velocity.x / 2; 
             }
             else
             {
                 position.x = _radius + 2;
-                velocity.x = -initialVelocity.x;
+                velocity.x = -velocity.x / 2;
             }
             
         }

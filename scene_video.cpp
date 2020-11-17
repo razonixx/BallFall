@@ -1,6 +1,7 @@
 #include "physics_video.hpp"
 
 int edgeThresh = 50;
+int contourThickness = 1;
 
 cv::Mat gray, canny_output;
 std::vector<std::vector<cv::Point>> contours;
@@ -26,17 +27,24 @@ void calculateContours(cv::Mat frame)
     Canny(grayFrame, canny_output, edgeThresh, edgeThresh*3, 3);
     findContours( canny_output, contours, hierarchy, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE, cv::Point(0, 0) );
 
-    cv::drawContours(frame, contours, -1, cv::Scalar(0, 255, 0), 2);
+    if(contourThickness > 0)
+    {
+        cv::drawContours(frame, contours, -1, cv::Scalar(0, 255, 0), contourThickness);
+    }
 }
 
 int main(int argc, const char** argv)
 {
     srand(time(NULL));
     bool useVideo = false;
+    int frameDelay = 15;
 
-    if(useVideo)
+    if(argc == 2)
     {
-        cap.open("video.mp4");
+        cap.open(argv[1]);
+        frameDelay = 16;
+        edgeThresh = 100;
+        useVideo = true;
     }
     else
     {
@@ -50,33 +58,29 @@ int main(int argc, const char** argv)
         std::cout << "Cannot read the video file" << std::endl;
     }
 
-    Ball* ballObject = new Ball(frame, cv::Point(300,450), cv::Point2f(static_cast<float>(rand()%10-5), 0), 10, cv::Scalar(255, 0, 255), 2);
-    //Ball* ballObject = new Ball(frame, cv::Point(50,450), cv::Point2f(-8, 0), 10, cv::Scalar(255, 0, 255), 2);
+    Ball* ballObject = new Ball(frame, cv::Point(30,45), cv::Point2f(3, 0), 10, cv::Scalar(255, 0, 255), 1.3);
 
     while(!exitLoop)
     {
         oldFrame = frame.clone();
         if (!cap.read(frame)) // if not success, break loop
         {
-            std::cout << "Cannot read the video file" << std::endl;
+            std::cout << "Video file empty" << std::endl;
+            exitLoop = true;
             break;
         }
-        cv::flip(frame, frame, 1);
-
-        if(!std::equal(oldFrame.begin<uchar>(), oldFrame.end<uchar>(), frame.begin<uchar>()))
+        if(!useVideo)
         {
-            //std::cout << "Changed frame" << std::endl;
-            contours.clear();
-            calculateContours(frame);
-            ballObject->updateCanvas(frame, contours);
+            cv::flip(frame, frame, 1);
         }
 
-        char k = cv::waitKey(1);
+        contours.clear();
+        calculateContours(frame);
+        ballObject->updateCanvas(frame, contours, edgeThresh);
+
+        char k = cv::waitKey(frameDelay);
         switch (k)
         {
-            case 'a':
-                break;
-
             case 27: // esc
                 exitLoop = true;
                 cap.release();
@@ -84,11 +88,23 @@ int main(int argc, const char** argv)
                 break;
             
             case 'd':
-                ballObject->initialVelocity = cv::Point2f(static_cast<float>(rand()%10-5), 0);
                 ballObject->debug();
                 break;
 
-            case 'f':
+            case 82:
+                edgeThresh -= 10;
+                break;
+
+            case 84:
+                edgeThresh += 10;
+                break;
+
+            case 81:
+                contourThickness--;
+                break;
+
+            case 83:
+                contourThickness++;
                 break;
             
             default:
