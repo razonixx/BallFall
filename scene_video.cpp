@@ -58,11 +58,10 @@ int main(int argc, const char** argv)
         std::cout << "Cannot read the video file" << std::endl;
     }
 
-    Ball* ballObject = new Ball(frame, cv::Point(30,45), cv::Point2f(3, 0), 10, cv::Scalar(255, 0, 255), 1.3);
+    Ball* ballObject = new Ball(frame, cv::Point(30,45), cv::Point2f(3, 0), 15, cv::Scalar(255, 0, 255), 1.3);
 
     while(!exitLoop)
     {
-        oldFrame = frame.clone();
         if (!cap.read(frame)) // if not success, break loop
         {
             std::cout << "Video file empty" << std::endl;
@@ -89,6 +88,14 @@ int main(int argc, const char** argv)
             
             case 'd':
                 ballObject->debug();
+                break;
+
+            case 'i':
+                ballObject->increaseRadius();
+                break;
+
+            case 'o':
+                ballObject->decreaseRadius();
                 break;
 
             case 82:

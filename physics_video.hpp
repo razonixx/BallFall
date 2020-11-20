@@ -34,7 +34,7 @@ class Ball
         cv::Point2f initialVelocity;
         cv::Point2f velocity;
         float milisecondsSinceLastCollision;
-        int timeToBounce = .05;
+        int timeToBounce = 0;
 
     public: 
         Ball(
@@ -150,7 +150,7 @@ class Ball
             {
                 for(int i = 0; i < _contours.size(); i++)
                     for(int j = 0; j < _contours[i].size(); j++)
-                        if(floor(euclideanDist(_contours[i][j], position)) < 4)
+                        if(floor(euclideanDist(_contours[i][j], position)) < _radius)
                         {
                             return true;
                         }
@@ -237,5 +237,15 @@ class Ball
             if(angleOfMovement <= -180 && angleOfMovement >= -360)
                 return true; //Negative movement in y
             return false;
+        }
+
+        void increaseRadius()
+        {
+            _radius+=5;
+        }
+
+        void decreaseRadius()
+        {
+            _radius-=5;
         }
 };
