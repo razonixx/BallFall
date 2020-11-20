@@ -11,7 +11,7 @@ cv::VideoCapture cap;
 cv::Mat frame, oldFrame;
 cv::Mat grayFrame;
 
-const char* window_name1 = "Fall Ball";
+const char* window_name1 = "Computer Vision Project";
 
 bool exitLoop = false;
 
